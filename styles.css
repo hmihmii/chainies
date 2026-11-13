@@ -228,6 +228,30 @@ button.card:hover, a.card:hover { transform: translateY(-2px); }
   max-width: calc(100% - 32px);
 }
 
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+a.stat { text-decoration: none; color: inherit; }
+button.stat { text-align: left; border: 2px solid transparent; }
+button.stat[aria-pressed="true"] { border-color: var(--ink); }
+.word.st-done { background: var(--c1); } .word.st-due { background: var(--c2); } .word.st-learning { background: var(--c3); }
+.write { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px 18px 22px; border-radius: 30px; }
+.winfo { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; }
+.winfo p { margin: 2px 0 0; }
+.wword { font-size: 1.9rem; line-height: 1.2; }
+.tian {
+  width: min(300px, 100%); aspect-ratio: 1; border-radius: 22px; touch-action: none; user-select: none; -webkit-user-select: none;
+  background:
+    linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat,
+    linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat,
+    var(--shell);
+  display: grid; place-items: center; overflow: hidden;
+}
+.write #wst { margin: 0; text-align: center; min-height: 1.5em; }
+.write .seg { background: var(--shell); }
+details summary { cursor: pointer; font: 500 .98rem var(--display); }
+.pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.pick button { padding: 6px 12px; border-radius: 12px; background: var(--shell); font-size: 1.15rem; }
+.pick button.ok { background: var(--c1); }
+.pick button[aria-current="true"] { background: var(--pill); color: var(--pill-fg); }
 @media (max-width: 900px) {
   .cols { grid-template-columns: minmax(0, 1fr); }
 }
@@ -241,7 +265,8 @@ button.card:hover, a.card:hover { transform: translateY(-2px); }
     padding: 8px max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
   }
   .logo { display: none; }
-  .rail a { width: 44px; height: 44px; }
+  .rail a { width: 42px; height: 42px; }
+  .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .g3.keep { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .stat { padding: 12px; } .stat b { font-size: 1.5rem; }

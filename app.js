@@ -17,13 +17,22 @@
   const LV_TOTAL = { 1: 0, 2: 0, 3: 0, 4: 0 };
   WORDS.forEach((w) => LV_TOTAL[w.l]++);
   const IV = [0, 1, 3, 7, 14, 30, 60]; // khoảng cách ôn (ngày) theo hộp
+  const MASTER = 3; // từ hộp này trở lên coi là đã thuộc
+  const STROKES = window.HSK_STROKES || {};
+  const canWrite = (w) => !!window.HanziWriter && [...w.h].every((c) => STROKES[c]);
 
   // ---------- Trạng thái ----------
   const KEY = 'chainies-v1';
-  const DEF = { name: '', pal: 'mint', mode: 'auto', goal: 10, exam: '', pinyin: true, kai: false, lv: [1, 2, 3, 4], w: {}, days: {}, quiz: [], t: 0 };
+  const DEF = { name: '', pal: 'mint', mode: 'auto', goal: 10, exam: '', pinyin: true, kai: false, lv: [1], w: {}, wr: {}, days: {}, quiz: [], t: 0, v: 2 };
   let S = { ...DEF };
   try { const raw = localStorage.getItem(KEY); if (raw) S = { ...DEF, ...JSON.parse(raw) }; } catch (e) {}
 
+  function migrate() {
+    // Bản đầu chọn sẵn cả 4 cấp. Người mới bắt đầu thì tập trung HSK 1 trước.
+    if (S.v !== 2) { S.v = 2; if (!Object.keys(S.w).some((id) => id[0] !== '1')) S.lv = [1]; }
+    if (!S.wr) S.wr = {};
+  }
+  migrate();
   let cloudRef = null, cloudBusy = false, cloudDirty = false, cloudTimer = 0, cloudState = 'local';
   function save() {
     S.t = Date.now();
@@ -51,7 +60,7 @@
       if (snap.exists) {
         const r = snap.data();
         if ((r.t || 0) > (S.t || 0)) {
-          S = { ...DEF, ...JSON.parse(r.json) };
+          S = { ...DEF, ...JSON.parse(r.json) }; migrate();
           try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
           applyLook(); render();
         } else if ((S.t || 0) > (r.t || 0)) pushCloud();
@@ -65,8 +74,8 @@
   const ds = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   const today = () => ds(new Date());
   const addDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return ds(d); };
-  const day = () => (S.days[today()] = S.days[today()] || { n: 0, r: 0, q: 0, t: 0 });
-  const active = (k) => { const d = S.days[k]; return !!d && (d.n + d.r + d.q + d.t) > 0; };
+  const day = () => (S.days[today()] = S.days[today()] || { n: 0, r: 0, q: 0, t: 0, w: 0 });
+  const active = (k) => { const d = S.days[k]; return !!d && (d.n + d.r + d.q + d.t + (d.w || 0)) > 0; };
   function streak() {
     const d = new Date(); let n = 0;
     if (!active(ds(d))) d.setDate(d.getDate() - 1);
@@ -80,6 +89,8 @@
   const dueWords = () => WORDS.filter((w) => S.w[w.id] && S.w[w.id][1] <= today());
   const newLeft = () => Math.max(0, S.goal - day().n);
   const newWords = (n) => WORDS.filter((w) => !S.w[w.id] && inLv(w)).slice(0, n);
+  const status = (w) => { const s = S.w[w.id]; return !s ? 'new' : s[1] <= today() ? 'due' : s[0] >= MASTER ? 'done' : 'learning'; };
+  const mastered = () => learned().filter((id) => S.w[id][0] >= MASTER).length;
   const lvDone = (l) => WORDS.filter((w) => w.l === l && S.w[w.id]).length;
   const quizAvg = () => { const q = S.quiz.slice(-5); return q.length ? Math.round(q.reduce((a, b) => a + b, 0) / q.length) : null; };
   const shuffle = (a) => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -112,6 +123,7 @@
     quiz: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5.5"/></svg>',
     talk: '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z"/></svg>',
     book: '<svg viewBox="0 0 24 24"><path d="M12 6c-2-1.5-4.5-2-8-2v14c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2V4c-3.5 0-6 .5-8 2Zm0 0v14"/></svg>',
+    pen: '<svg viewBox="0 0 24 24"><path d="M4 20l1-4.5L16.5 4a2.1 2.1 0 0 1 3 3L8 18.5 4 20Zm10-13.5 3 3"/></svg>',
     set: '<svg viewBox="0 0 24 24"><path d="M5 7h9m4 0h1M5 17h3m4 0h7"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
     say: '<svg class="ic" viewBox="0 0 24 24"><path d="M4 9.500v5h3.500L12 18V6L7.5 9.500H4Zm12-.5a4.200 4.2 0 0 1 0 6m2.5-8.500a8 8 0 0 1 0 11"/></svg>',
     go: '<svg class="ic" viewBox="0 0 24 24"><path d="M8 16 16 8m-6 0h6v6"/></svg>',
@@ -119,7 +131,7 @@
     next: '<svg class="ic" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg>',
     ok: '<svg class="ic" viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9"/></svg>'
   };
-  const NAV = [['home', 'Tổng quan', I.home], ['hoc', 'Thẻ từ', I.cards], ['quiz', 'Kiểm tra', I.quiz], ['giao-tiep', 'Giao tiếp', I.talk], ['kho-tu', 'Kho từ', I.book], ['tuy-chinh', 'Tuỳ chỉnh', I.set]];
+  const NAV = [['home', 'Tổng quan', I.home], ['hoc', 'Thẻ từ', I.cards], ['viet', 'Luyện viết', I.pen], ['quiz', 'Kiểm tra', I.quiz], ['giao-tiep', 'Giao tiếp', I.talk], ['kho-tu', 'Tiến độ', I.book], ['tuy-chinh', 'Tuỳ chỉnh', I.set]];
   const route = () => { const r = location.hash.slice(1); return NAV.some((n) => n[0] === r) ? r : 'home'; };
 
   function applyLook() {
@@ -161,6 +173,7 @@
     return [
       { ok: d.n >= S.goal, t: `Học ${S.goal} từ mới`, s: `${Math.min(d.n, S.goal)}/${S.goal} từ`, to: 'hoc' },
       { ok: has && due === 0, t: 'Ôn thẻ đến hạn', s: !has ? 'Chưa có thẻ nào, học từ mới trước' : due ? `Còn ${due} thẻ` : 'Đã ôn hết', to: 'hoc' },
+      { ok: (d.w || 0) >= 3, t: 'Luyện viết 3 chữ', s: `${Math.min(d.w || 0, 3)}/3 chữ, theo đúng thứ tự nét`, to: 'viet' },
       { ok: d.q > 0, t: 'Làm một bài kiểm tra', s: d.q ? `Đã làm ${d.q} bài` : '10 câu, khoảng 3 phút', to: 'quiz' },
       { ok: d.t > 0, t: 'Luyện nói một chủ đề', s: d.t ? 'Đã luyện hôm nay' : 'Nghe và nhắc lại từng câu', to: 'giao-tiep' }
     ];
@@ -181,13 +194,13 @@
       <div class="grid g3">
         <a class="card act c1" href="#hoc"><span class="big num">${due}</span><strong>Ôn tập</strong><small>thẻ đến hạn</small><span class="go">${I.go}</span></a>
         <a class="card act c2" href="#hoc"><span class="big num">${Math.min(newLeft(), newWords(99).length)}</span><strong>Từ mới</strong><small>mục tiêu ${S.goal} từ/ngày</small><span class="go">${I.go}</span></a>
-        <a class="card act c3" href="#giao-tiep"><span class="big num">${D.talks.length}</span><strong>Giao tiếp</strong><small>chủ đề hội thoại</small><span class="go">${I.go}</span></a>
+        <a class="card act c3" href="#viet"><span class="big num">${Object.keys(S.wr).length}</span><strong>Luyện viết</strong><small>chữ đã viết đúng</small><span class="go">${I.go}</span></a>
       </div>
       <h2>Tiến độ học</h2>
       <div class="grid g3 keep">
-        <div class="card stat c1"><small>Đã học</small><b class="num">${learned().length}</b></div>
-        <div class="card stat c3"><small>Kiểm tra</small><b class="num">${avg === null ? '–' : avg}</b></div>
-        <div class="card stat c4"><small>Đã thuộc</small><b class="num">${learned().filter((id) => S.w[id][0] >= 4).length}</b></div>
+        <a class="card stat c1" href="#kho-tu"><small>Đã thuộc</small><b class="num">${mastered()}</b></a>
+        <a class="card stat c2" href="#kho-tu"><small>Cần ôn</small><b class="num">${due}</b></a>
+        <a class="card stat c3" href="#quiz"><small>Kiểm tra</small><b class="num">${avg === null ? '–' : avg}</b></a>
       </div>
       <div class="grid g2">${[1, 2, 3, 4].map((l, i) => {
         const n = lvDone(l), tot = LV_TOTAL[l];
@@ -231,7 +244,7 @@
         <button class="card c2" data-a="rate" data-v="0">Chưa nhớ<small>hỏi lại ngay</small></button>
         <button class="card c3" data-a="rate" data-v="1">Hơi nhớ<small>ôn lại sớm</small></button>
         <button class="card c1" data-a="rate" data-v="2">Nhớ rồi<small>giãn lịch ôn</small></button>
-      </div>` : `<button class="btn" data-a="flip">Xem nghĩa</button>`}
+      </div>${canWrite(w) ? `<button class="btn ghost" data-a="towrite" data-v="${w.id}">${I.pen.replace('<svg', '<svg class="ic"')} Luyện viết chữ này</button>` : ''}` : `<button class="btn" data-a="flip">Xem nghĩa</button>`}
       <p class="mute num" style="text-align:center;margin:0">${sess.done}/${sess.total} thẻ</p></div>`;
   }
   function rate(v) {
@@ -245,6 +258,65 @@
       sess.done++;
     }
     sess.i++; sess.flip = false; save(); render();
+  }
+
+  // ---------- Luyện viết ----------
+  let wr = { id: null, c: 0, mode: 'anim' }, writer = null;
+  const writeList = () => WORDS.filter((w) => inLv(w) && canWrite(w));
+  function cssColor(name) {
+    try {
+      const c = document.createElement('canvas').getContext('2d');
+      c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return c.fillStyle;
+    } catch (e) { return '#222222'; }
+  }
+  function vWrite() {
+    const list = writeList();
+    const head = `<div class="rowx"><h1>Luyện viết</h1><span class="chip">Đã viết đúng <b class="num" id="wcount">${Object.keys(S.wr).length}</b> chữ</span></div>`;
+    if (!list.length) {
+      return `<div class="page">${head}<div class="card empty c4"><div class="h">写字</div><h2>${window.HanziWriter ? 'Chưa có dữ liệu nét cho cấp độ đang chọn' : 'Không tải được công cụ vẽ nét'}</h2>
+        <p class="mute">${window.HanziWriter ? 'Hiện phần luyện viết có đủ 174 chữ của HSK 1. Hãy bật HSK 1 ở trang Thẻ từ.' : 'Kiểm tra kết nối mạng rồi mở lại trang.'}</p><a class="btn" href="#hoc">Tới Thẻ từ</a></div></div>`;
+    }
+    let i = list.findIndex((w) => w.id === wr.id);
+    if (i < 0) { i = Math.max(0, list.findIndex((w) => [...w.h].some((c) => !S.wr[c]))); wr.id = list[i].id; wr.c = 0; }
+    const w = list[i], chars = [...w.h];
+    if (wr.c >= chars.length) wr.c = 0;
+    const ch = chars[wr.c], n = STROKES[ch].strokes.length;
+    return `<div class="page">${head}
+      <div class="card write c4">
+        <div class="winfo"><div><span class="han wword">${esc(w.h)}</span><p>${esc(w.p)} · ${esc(w.m)}</p></div>
+          <button class="icon-btn say" data-a="say" data-v="${esc(w.h)}" aria-label="Nghe phát âm" style="position:static;background:var(--shell)">${I.say}</button></div>
+        ${chars.length > 1 ? `<div class="seg" role="group" aria-label="Chọn chữ">${chars.map((c, k) => `<button class="han" data-a="wchar" data-v="${k}" aria-pressed="${k === wr.c}">${esc(c)}${S.wr[c] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}
+        <div class="tian" id="hz" data-c="${esc(ch)}" aria-label="Ô viết chữ ${esc(ch)}"></div>
+        <p id="wst" class="num" role="status">${wr.mode === 'quiz' ? `Viết nét 1/${n} bằng ngón tay hoặc chuột` : `${n} nét${S.wr[ch] ? ` · đã viết đúng ${S.wr[ch]} lần` : ''}`}</p>
+        <div class="seg"><button data-a="wmode" data-v="anim" aria-pressed="${wr.mode === 'anim'}">Xem thứ tự nét</button><button data-a="wmode" data-v="quiz" aria-pressed="${wr.mode === 'quiz'}">Tự viết</button></div>
+      </div>
+      <div class="rowx"><button class="btn ghost" data-a="wnav" data-v="-1">${I.prev} Từ trước</button><span class="mute num">${i + 1}/${list.length}</span><button class="btn" data-a="wnav" data-v="1">Từ sau ${I.next}</button></div>
+      <details class="card"><summary>Chọn chữ khác</summary><div class="pick">${list.map((x) => `<button class="han ${[...x.h].every((c) => S.wr[c]) ? 'ok' : ''}" data-a="wpick" data-v="${x.id}" ${x.id === w.id ? 'aria-current="true"' : ''}>${esc(x.h)}</button>`).join('')}</div></details></div>`;
+  }
+  function mountWriter() {
+    const box = $('#hz'); writer = null;
+    if (!box || !window.HanziWriter) return;
+    const ch = box.dataset.c, size = Math.min(300, box.clientWidth), st = $('#wst'), n = STROKES[ch].strokes.length;
+    writer = window.HanziWriter.create(box, ch, {
+      width: size, height: size, padding: 14, showOutline: true, showCharacter: wr.mode !== 'quiz',
+      strokeColor: cssColor('--ink'), outlineColor: cssColor('--line'), drawingColor: cssColor('--ink'), highlightColor: cssColor('--bad'),
+      drawingWidth: 26, strokeAnimationSpeed: 1, delayBetweenStrokes: 220, showHintAfterMisses: 2,
+      charDataLoader: (c, done) => done(STROKES[c])
+    });
+    if (wr.mode === 'anim') writer.animateCharacter();
+    else {
+      let miss = 0;
+      writer.quiz({
+        onMistake: () => { miss++; st.textContent = 'Chưa đúng nét, thử lại. Sai 2 lần sẽ có gợi ý.'; },
+        onCorrectStroke: (d) => { if (d.strokesRemaining) st.textContent = `Đúng rồi. Viết nét ${d.strokeNum + 2}/${n}`; },
+        onComplete: () => {
+          S.wr[ch] = (S.wr[ch] || 0) + 1; const d = day(); d.w = (d.w || 0) + 1; save();
+          st.textContent = miss ? `Hoàn thành, sai ${miss} nét. Viết lại lần nữa cho nhớ nhé.` : 'Hoàn hảo, không sai nét nào!';
+          const c = $('#wcount'); if (c) c.textContent = Object.keys(S.wr).length;
+        }
+      });
+    }
   }
 
   // ---------- Kiểm tra ----------
@@ -304,22 +376,25 @@
   }
 
   // ---------- Kho từ ----------
-  let find = '', findLv = 0;
+  let find = '', findLv = S.lv.length === 1 ? S.lv[0] : 0, findSt = '';
   function wordList() {
     const f = find.trim().toLowerCase();
     const strip = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
     const fs = strip(f);
-    const list = WORDS.filter((w) => (!findLv || w.l === findLv) && (!f || w.h.includes(f) || strip(w.p).replace(/\s/g, '').includes(fs.replace(/\s/g, '')) || strip(w.m).includes(fs)));
+    const list = WORDS.filter((w) => (!findLv || w.l === findLv) && (!findSt || status(w) === findSt) && (!f || w.h.includes(f) || strip(w.p).replace(/\s/g, '').includes(fs.replace(/\s/g, '')) || strip(w.m).includes(fs)));
     const shown = list.slice(0, 240);
-    return `<p class="mute num" style="margin:0">${list.length} từ${list.length > 240 ? ', đang hiện 240 từ đầu' : ''}. Màu vàng: đang học. Màu chủ đạo: đã thuộc.</p>
+    if (!list.length) return '<p class="mute" style="margin:0">Không có từ nào ở mục này.</p>';
+    return `<p class="mute num" style="margin:0">${list.length} từ${list.length > 240 ? ', đang hiện 240 từ đầu' : ''}. Chạm vào từ để nghe.</p>
       <div class="words">${shown.map((w) => {
-        const s = S.w[w.id];
-        return `<button class="word ${s ? (s[0] >= 4 ? 's2' : 's1') : ''}" data-a="say" data-v="${esc(w.h)}"><span class="han">${esc(w.h)}</span><div>${esc(w.p)}<em>${esc(w.m)}</em></div></button>`;
+        return `<button class="word st-${status(w)}" data-a="say" data-v="${esc(w.h)}"><span class="han">${esc(w.h)}</span><div>${esc(w.p)}<em>${esc(w.m)}</em></div></button>`;
       }).join('')}</div>`;
   }
   function vList() {
-    return `<div class="page wide"><div class="rowx"><h1>Kho từ</h1>
+    return `<div class="page wide"><div class="rowx"><h1>Tiến độ</h1>
       <div class="seg" role="group" aria-label="Lọc cấp độ">${[0, 1, 2, 3, 4].map((l) => `<button data-a="flv" data-v="${l}" aria-pressed="${findLv === l}">${l ? 'HSK ' + l : 'Tất cả'}</button>`).join('')}</div></div>
+      <div class="grid g4">${[['done', 'Đã thuộc', 'c1'], ['due', 'Cần ôn', 'c2'], ['learning', 'Đang học', 'c3'], ['new', 'Chưa học', '']].map(([k, t, c]) =>
+        `<button class="card stat ${c}" data-a="fst" data-v="${k}" aria-pressed="${findSt === k}"><small>${t}</small><b class="num">${WORDS.filter((w) => (!findLv || w.l === findLv) && status(w) === k).length}</b></button>`).join('')}</div>
+      <p class="mute" style="margin:0">Một từ được tính là đã thuộc sau 3 lần bạn chấm "Nhớ rồi". Từ cần ôn là từ đã đến hạn ôn lại hoặc vừa trả lời sai.</p>
       <input class="search" id="find" type="search" placeholder="Tìm chữ Hán, pinyin hoặc nghĩa (vd: xuexi, cảm ơn)" value="${esc(find)}" aria-label="Tìm từ">
       <div id="wl" class="set" style="gap:14px">${wordList()}</div></div>`;
   }
@@ -345,12 +420,13 @@
   }
 
   // ---------- Vẽ & sự kiện ----------
-  const VIEWS = { home: vHome, hoc: vCards, quiz: vQuiz, 'giao-tiep': vTalk, 'kho-tu': vList, 'tuy-chinh': vSet };
+  const VIEWS = { home: vHome, hoc: vCards, viet: vWrite, quiz: vQuiz, 'giao-tiep': vTalk, 'kho-tu': vList, 'tuy-chinh': vSet };
   function render() {
     const r = route();
     $('#app').innerHTML = `<div class="shell"><nav class="rail" aria-label="Điều hướng"><div class="logo" aria-hidden="true">学</div>
       ${NAV.map(([id, t, ic]) => `<a href="#${id}" title="${t}" aria-label="${t}" ${id === r ? 'aria-current="page"' : ''}>${ic}</a>`).join('')}</nav>
       <main>${VIEWS[r]()}</main></div>`;
+    if (r === 'viet') mountWriter();
   }
   const A = {
     cal(v) { calM.m += +v; if (calM.m < 0) { calM.m = 11; calM.y--; } if (calM.m > 11) { calM.m = 0; calM.y++; } },
@@ -375,6 +451,12 @@
     tvi() { S.vi = S.vi === false; save(); },
     line(v) { speak(v); const d = day(); if (!d.t) { d.t = 1; save(); } return false; },
     flv(v) { findLv = +v; },
+    fst(v) { findSt = findSt === v ? '' : v; },
+    towrite(v) { wr.id = v; wr.c = 0; wr.mode = 'anim'; location.hash = 'viet'; return false; },
+    wmode(v) { wr.mode = v; },
+    wchar(v) { wr.c = +v; },
+    wpick(v) { wr.id = v; wr.c = 0; },
+    wnav(v) { const l = writeList(), i = l.findIndex((w) => w.id === wr.id); wr.id = l[(i + +v + l.length) % l.length].id; wr.c = 0; },
     goal(v) { S.goal = +v; sess = null; save(); },
     pal(v) { S.pal = v; save(); applyLook(); },
     mode(v) { S.mode = v; if (v === 'auto') document.documentElement.removeAttribute('data-theme'); save(); applyLook(); },
@@ -382,7 +464,7 @@
     pin(v) { S.pinyin = v === '1'; save(); },
     reset1() { resetAsk = true; },
     reset0() { resetAsk = false; },
-    reset2() { S.w = {}; S.days = {}; S.quiz = []; sess = null; quiz = null; resetAsk = false; save(); toast('Đã xoá tiến độ học'); }
+    reset2() { S.w = {}; S.wr = {}; S.days = {}; S.quiz = []; sess = null; quiz = null; resetAsk = false; save(); toast('Đã xoá tiến độ học'); }
   };
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-a]'); if (!el) return;
