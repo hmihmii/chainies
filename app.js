@@ -10,8 +10,9 @@
   for (const l of [1, 2, 3, 4]) {
     for (const row of D.vocab[l].split('\n')) {
       const [h, p, m] = row.split('|');
-      const w = { id: l + h, h, p, m, l };
-      WORDS.push(w); BY_ID[w.id] = w;
+      if (BY_ID[h]) continue;
+      const w = { id: h, h, p, m, l };
+      WORDS.push(w); BY_ID[h] = w;
     }
   }
   const LV_TOTAL = { 1: 0, 2: 0, 3: 0, 4: 0 };
@@ -23,13 +24,19 @@
 
   // ---------- Trạng thái ----------
   const KEY = 'chainies-v1';
-  const DEF = { name: '', pal: 'mint', mode: 'auto', goal: 10, exam: '', pinyin: true, kai: false, lv: [1], w: {}, wr: {}, days: {}, quiz: [], t: 0, v: 2 };
+  const DEF = { name: '', pal: 'mint', mode: 'auto', goal: 10, exam: '', pinyin: true, kai: false, lv: [1], w: {}, wr: {}, days: {}, quiz: [], t: 0, v: 3 };
   let S = { ...DEF };
   try { const raw = localStorage.getItem(KEY); if (raw) S = { ...DEF, ...JSON.parse(raw) }; } catch (e) {}
 
   function migrate() {
     // Bản đầu chọn sẵn cả 4 cấp. Người mới bắt đầu thì tập trung HSK 1 trước.
-    if (S.v !== 2) { S.v = 2; if (!Object.keys(S.w).some((id) => id[0] !== '1')) S.lv = [1]; }
+    if (S.v !== 2 && S.v !== 3 && !Object.keys(S.w).some((id) => id[0] !== '1')) S.lv = [1];
+    if (S.v !== 3) {
+      // Bản trước đánh mã từ theo "cấp + chữ". Chuẩn mới xếp lại cấp nên mã chỉ còn là chữ Hán.
+      const w = {};
+      for (const id in S.w) { const k = /^[1-4]/.test(id) ? id.slice(1) : id; if (!w[k]) w[k] = S.w[id]; }
+      S.w = w; S.v = 3;
+    }
     if (!S.wr) S.wr = {};
   }
   migrate();
@@ -275,7 +282,7 @@
     const head = `<div class="rowx"><h1>Luyện viết</h1><span class="chip">Đã viết đúng <b class="num" id="wcount">${Object.keys(S.wr).length}</b> chữ</span></div>`;
     if (!list.length) {
       return `<div class="page">${head}<div class="card empty c4"><div class="h">写字</div><h2>${window.HanziWriter ? 'Chưa có dữ liệu nét cho cấp độ đang chọn' : 'Không tải được công cụ vẽ nét'}</h2>
-        <p class="mute">${window.HanziWriter ? 'Hiện phần luyện viết có đủ 174 chữ của HSK 1. Hãy bật HSK 1 ở trang Thẻ từ.' : 'Kiểm tra kết nối mạng rồi mở lại trang.'}</p><a class="btn" href="#hoc">Tới Thẻ từ</a></div></div>`;
+        <p class="mute">${window.HanziWriter ? 'Hiện phần luyện viết có đủ ${Object.keys(STROKES).length} chữ của HSK 1. Hãy bật HSK 1 ở trang Thẻ từ.' : 'Kiểm tra kết nối mạng rồi mở lại trang.'}</p><a class="btn" href="#hoc">Tới Thẻ từ</a></div></div>`;
     }
     let i = list.findIndex((w) => w.id === wr.id);
     if (i < 0) { i = Math.max(0, list.findIndex((w) => [...w.h].some((c) => !S.wr[c]))); wr.id = list[i].id; wr.c = 0; }
